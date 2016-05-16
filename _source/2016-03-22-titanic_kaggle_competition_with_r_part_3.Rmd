@@ -1,0 +1,168 @@
+---
+layout: post
+title: "Titanic Kaggle Machine Learning Competition With R - Part 3: Selecting and Tuning The Model"
+author: "Payam Bahreyni"
+date: 2016-03-22
+categories: [tutorials]
+tags : [Classification, Cross Validation, Decision Trees, Kaggle, Machine Learning, Model Tuning, Model Selection, R]
+output: 
+  html_document: 
+    toc: yes
+---
+```{r package_options_2, include=FALSE}
+knitr::opts_knit$set(root.dir= normalizePath("../"))
+```
+
+```{r, echo= F, warning=FALSE, message=FALSE}
+source("part_2.R")
+```
+
+```{r echo=FALSE, cache= F}
+knitr::read_chunk('part_3.R')
+```
+
+## Overfitting & Cross-validation
+
+In the machine learning practice, we are intersted in predictive models capable of predicting something in the real world. We'd like to *predict* something given all we know about the instance. So, our models should be capable of being generalized to cover real-world scenarios.
+
+When we check the accuracy of our predictions against the training data and maximize our accuracy in this setting, there is a risk of **overfitting** the training data, meaning we have captured so much of the outliers, exceptions, and particularities of the training data that the resulting model cannot be generalized anymore. This is what has happened with our `sex.class.age.tree` model.
+
+What can be done to avoid overfitting? We can create different versions of the training data, keeping part of the training data as test set, evaluate our model, and pick the model that performs best, on average. This is called **cross-validation**. Let's see a practical example of cross-validation.
+
+### K-fold Cross Validation
+
+One of the popular methods of cross validation is K-fold cross validation. In this method, the training data is split into `k` partitions. Each time, we leave out one of the partitions and train the model on the rest, then test and measure the performance on the partition not used for training. To determine the model performance, average performance of all the `k` runs will be used.
+
+```{r cv-1, cache= T}
+```
+
+`trainControl` function is used to create a 10-fold cross validation control object. This object is then passed to the `train` function. Decision trees are controlled by `cp` (complexity parameter), which tells the algorithm to stop when the measure (accuracy here) does not improve by this factor. So, we are using 10-fold cross validation to find an appropriate `cp`.
+
+`plot.train` and `print.train` show the details of training, i.e. how accuracy changed by changing `cp`.
+
+```{r}
+plot.train(sex.class.age.tree)
+print.train(sex.class.age.tree)
+
+plot.decision.tree(sex.class.age.tree$finalModel)
+```
+
+```{r cv-2, echo=F, eval= F}
+```
+
+```{r}
+conMat$table
+percent(conMat$overall["Accuracy"])
+```
+
+The default value for `cp` is `0.01` and that's why our tree didn't change compared to what we had at the end of part 2. 
+
+Another parameter to control the training behavior is `tuneLength`, which tells how many instances to use for training. The default value for `tuneLength` is `3`, meaning 3 different values will be used per control parameter. Since we only have one control parameter (`cp`), it will try three different trees with different values for `cp`. Let's change this default to see what happens.
+
+```{r cv-3, cache= T}
+```
+
+```{r}
+plot.train(sex.class.age.tree)
+print.train(sex.class.age.tree)
+```
+
+As we see in the output, `5` different trees with different `cp`s have been tried and the `cp` with highest accuracy has been picked. Because the resulting `cp` is lower that the default value, we get a different tree this time.
+
+```{r, cache= T}
+plot.decision.tree(sex.class.age.tree$finalModel)
+```
+
+```{r cv-4, cache= T}
+```
+
+```{r}
+conMat$table
+percent(conMat$overall["Accuracy"])
+```
+
+```{r cv-5, cache= T}
+```
+
+Compared to our last `sex.class.age.tree` we have **both** higher training accuracy (84.18%) *and* better Kaggle score (0.75598). What if we continue increasing `tuneLength`?
+
+```{r cv-6, cache= T}
+```
+
+```{r}
+plot.train(sex.class.age.tree)
+print.train(sex.class.age.tree)
+
+plot.decision.tree(sex.class.age.tree$finalModel)
+```
+
+We may get too many similar trees that won't help. The result is a complete tree with branches not pruned and some nodes too sepcific. So, it is not always a good idea to try a lot of different trees.
+
+## Putting it together
+
+Let's bring `Fare` back with all the tuning in place.
+
+```{r cv-7, cache= T}
+```
+
+```{r}
+conMat$table
+percent(conMat$overall["Accuracy"])
+
+plot.decision.tree(sex.class.fare.age.tree$finalModel)
+```
+
+```{r cv-8}
+```
+
+```{r}
+plot.train(sex.class.fare.age.tree)
+print.train(sex.class.fare.age.tree)
+```
+
+```{r, echo= F, eval= F}
+cvCtrl <- trainControl(method= "cv", number = 5)
+sex.class.fare.age.tree <- train(Survived ~ Sex + Pclass + Fare + Age, 
+                                 data= train.data.impute, method= "rpart",
+                                 trControl= cvCtrl,
+                                 tuneLength= 10)
+
+sex.class.fare.age.survival <- predict(sex.class.fare.age.tree, train.data.impute)
+conMat <- confusionMatrix(sex.class.fare.age.survival, train.data.impute$Survived)
+conMat$table
+percent(conMat$overall["Accuracy"])
+
+plot.decision.tree(sex.class.fare.age.tree$finalModel)
+
+plot.train(sex.class.fare.age.tree)
+print.train(sex.class.fare.age.tree)
+
+sex.class.fare.age.solution <- get.solution(sex.class.fare.age.tree, test.data.impute)
+write.csv(sex.class.fare.age.solution, file= "output/new versions/sex_class_fare_age_cv.csv" , row.names= FALSE)
+```
+
+.75598
+
+```{r}
+sex.class.fare.age.tree <- train(Survived ~ Sex + Pclass + Fare + Age, 
+                                 data= train.data.impute, method= "rpart",
+                                 trControl= cvCtrl,
+                                 tuneLength= 5)
+
+sex.class.fare.age.survival <- predict(sex.class.fare.age.tree, train.data.impute)
+conMat <- confusionMatrix(sex.class.fare.age.survival, train.data.impute$Survived)
+conMat$table
+percent(conMat$overall["Accuracy"])
+
+plot.decision.tree(sex.class.fare.age.tree$finalModel)
+
+plot.train(sex.class.fare.age.tree)
+print.train(sex.class.fare.age.tree)
+
+sex.class.fare.age.solution <- get.solution(sex.class.fare.age.tree, test.data.impute)
+write.csv(sex.class.fare.age.solution, file= "output/new versions/sex_class_fare_age_cv_5.csv" , row.names= FALSE)
+```
+
+This time we get slightly lower training accuracy than the model without `Fare`. Our Kaggle score has improved to 0.7799 even with a smaller tree of depth 5 as compared to a depth of 8 we had before.
+
+It should be noted that the best score we have had upto this point is for the model using `Sex`, `Pclass`, and `Fare`. My guess is that it is because of inherent errors in imputing missing values for `Age`.
